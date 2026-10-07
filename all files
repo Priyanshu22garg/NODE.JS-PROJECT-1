@@ -1,0 +1,178 @@
+server.js
+const express = require("express");
+const mysql = require("mysql2");
+const cors = require("cors");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static("public"));
+
+const db = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "YOUR_PASSWORD",
+    database: "postdb"
+});
+
+// Add post
+app.post("/posts", (req, res) => {
+    const { link, description } = req.body;
+
+    db.query(
+        "INSERT INTO posts (link, description) VALUES (?, ?)",
+        [link, description],
+        (err, result) => {
+            if (err) return res.status(500).json(err);
+            res.json({ message: "Post added" });
+        }
+    );
+});
+
+// Get posts
+app.get("/posts", (req, res) => {
+    db.query("SELECT * FROM posts", (err, result) => {
+        if (err) return res.status(500).json(err);
+        res.json(result);
+    });
+});
+
+// Add comment
+app.post("/posts/:id/comments", (req, res) => {
+    db.query(
+        "INSERT INTO comments (postId, comment) VALUES (?, ?)",
+        [req.params.id, req.body.comment],
+        (err) => {
+            if (err) return res.status(500).json(err);
+            res.json({ message: "Comment added" });
+        }
+    );
+});
+
+// Get comments
+app.get("/posts/:id/comments", (req, res) => {
+    db.query(
+        "SELECT * FROM comments WHERE postId = ?",
+        [req.params.id],
+        (err, result) => {
+            if (err) return res.status(500).json(err);
+            res.json(result);
+        }
+    );
+});
+
+app.listen(3000, () => {
+    console.log("Server running on 3000");
+});
+
+
+
+
+
+
+public/index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Posts</title>
+</head>
+<body>
+
+<h1>Add Post</h1>
+
+<input id="link" placeholder="Post Link">
+<input id="description" placeholder="Description">
+<button onclick="addPost()">Add Post</button>
+
+<h2>Posts</h2>
+<div id="posts"></div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
+
+
+
+
+
+
+public/script.js
+async function addPost() {
+    await fetch("/posts", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            link: link.value,
+            description: description.value
+        })
+    });
+
+    getPosts();
+}
+
+async function getPosts() {
+    const res = await fetch("/posts");
+    const posts = await res.json();
+
+    postsDiv.innerHTML = posts.map(p => `
+        <div>
+            <a href="${p.link}" target="_blank">${p.link}</a>
+            <p>${p.description}</p>
+
+            <input id="c${p.id}" placeholder="Comment">
+            <button onclick="addComment(${p.id})">Comment</button>
+
+            <div id="comments${p.id}"></div>
+        </div>
+    `).join("");
+
+    posts.forEach(p => getComments(p.id));
+}
+
+async function addComment(id) {
+    await fetch(`/posts/${id}/comments`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            comment: document.getElementById(`c${id}`).value
+        })
+    });
+
+    getComments(id);
+}
+
+async function getComments(id) {
+    const res = await fetch(`/posts/${id}/comments`);
+    const comments = await res.json();
+
+    document.getElementById(`comments${id}`).innerHTML =
+        comments.map(c => `<p>${c.comment}</p>`).join("");
+}
+
+getPosts();
+
+
+
+
+
+
+
+
+MySQL
+CREATE DATABASE postdb;
+USE postdb;
+
+CREATE TABLE posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    link VARCHAR(500),
+    description TEXT
+);
+
+CREATE TABLE comments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    postId INT,
+    comment TEXT
+);
+
